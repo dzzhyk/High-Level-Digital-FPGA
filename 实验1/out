@@ -1,5 +1,5 @@
 [Node] now_id=1, origin_id=1, child_list=[[ChildNode] node_id=2, edge_type=0,[ChildNode] node_id=9, edge_type=0,[ChildNode] node_id=0, edge_type=0,[ChildNode] node_id=0, edge_type=0], t_start=0, t_end=0, node_type=0, has_parent=0
-[Node] now_id=2, origin_id=2, child_list=[[ChildNode] node_id=3, edge_type=0,[ChildNode] node_id=1, edge_type=1,[ChildNode] node_id=0, edge_type=0,[ChildNode] node_id=0, edge_type=0], t_start=1, t_end=1, node_type=0, has_parent=1
+[Node] now_id=2, origin_id=2, child_list=[[ChildNode] node_id=3, edge_type=0,[ChildNode] node_id=0, edge_type=0,[ChildNode] node_id=0, edge_type=0,[ChildNode] node_id=0, edge_type=0], t_start=1, t_end=1, node_type=0, has_parent=1
 [Node] now_id=3, origin_id=3, child_list=[[ChildNode] node_id=4, edge_type=0,[ChildNode] node_id=11, edge_type=0,[ChildNode] node_id=5, edge_type=1,[ChildNode] node_id=0, edge_type=0], t_start=2, t_end=2, node_type=0, has_parent=1
 [Node] now_id=4, origin_id=4, child_list=[[ChildNode] node_id=5, edge_type=0,[ChildNode] node_id=0, edge_type=0,[ChildNode] node_id=0, edge_type=0,[ChildNode] node_id=0, edge_type=0], t_start=3, t_end=3, node_type=0, has_parent=1
 [Node] now_id=5, origin_id=5, child_list=[[ChildNode] node_id=6, edge_type=0,[ChildNode] node_id=0, edge_type=0,[ChildNode] node_id=0, edge_type=0,[ChildNode] node_id=0, edge_type=0], t_start=4, t_end=4, node_type=0, has_parent=1
@@ -9,14 +9,14 @@
 [Node] now_id=9, origin_id=9, child_list=[[ChildNode] node_id=10, edge_type=0,[ChildNode] node_id=0, edge_type=0,[ChildNode] node_id=0, edge_type=0,[ChildNode] node_id=0, edge_type=0], t_start=1, t_end=5, node_type=1, has_parent=1
 [Node] now_id=10, origin_id=10, child_list=[[ChildNode] node_id=8, edge_type=0,[ChildNode] node_id=0, edge_type=0,[ChildNode] node_id=0, edge_type=0,[ChildNode] node_id=0, edge_type=0], t_start=2, t_end=6, node_type=1, has_parent=1
 [Node] now_id=11, origin_id=11, child_list=[[ChildNode] node_id=6, edge_type=0,[ChildNode] node_id=0, edge_type=0,[ChildNode] node_id=0, edge_type=0,[ChildNode] node_id=0, edge_type=0], t_start=3, t_end=4, node_type=1, has_parent=1
-1,-1,2,9,0,0,0,1
-2,0,3,1,0,0,0,2
-3,1,4,11,5,0,0,3
-4,2,5,0,0,0,0,4
-5,3,6,0,0,0,0,5
-6,4,7,0,0,0,0,6
-7,5,8,0,0,0,0,7
-8,6,0,0,0,0,0,8
-9,0,10,0,0,0,1,9
-10,1,8,0,0,0,1,10
-11,2,6,0,0,0,1,11
+1,2,9,0,0,0,1
+2,3,0,0,0,0,2
+3,4,11,5,0,0,3
+4,5,0,0,0,0,4
+5,6,0,0,0,0,5
+6,7,0,0,0,0,6
+7,8,0,0,0,0,7
+8,0,0,0,0,0,8
+9,10,0,0,0,1,9
+10,8,0,0,0,1,10
+11,6,0,0,0,1,11
