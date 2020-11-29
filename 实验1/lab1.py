@@ -94,7 +94,6 @@ def ILP(pe, points, times, G, ii):
 
     PE = LpVariable("PE", lowBound=0, upBound=pe, cat="Integer")
     prob += PE
-
     vars = [LpVariable("x" + str(i) + "_" + str(k), lowBound=0, upBound=1, cat="Integer")
             for i in range(points) for k in range(times)]
 
