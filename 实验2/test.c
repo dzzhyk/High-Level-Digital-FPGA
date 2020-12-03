@@ -1,12 +1,17 @@
 #include <cstdio>
 #include <cstring>
+#include <algorithm>
 
 #define WIN_SIZE 3
-#define HALF_SIZE 1
 #define WIDTH 6
 #define HEIGHT 6
-#define WIN_SIZE 3
+#define HALF_SIZE (((WIN_SIZE) - 1) / 2)
+
 #define POOL_SIZE 2
+#define POOL_STRIDE 2
+#define POOL_OUT_HEIGHT ((HEIGHT - POOL_SIZE) / POOL_STRIDE + 1)
+#define POOL_OUT_WIDTH ((WIDTH - POOL_SIZE) / POOL_STRIDE + 1)
+
 
 // 是否在图像范围内
 int bounds_ok(const int y, int x)
@@ -110,45 +115,76 @@ void my_conv(const int in[], int out[]) {
     }
 }
 
-// 最大池化操作
-int max_pool(const int in[POOL_SIZE][POOL_SIZE]){
-    int temp = in[0][0];
-    for(int i=0; i<POOL_SIZE; i++){
-        for(int j=0; j<POOL_SIZE; j++){
-            if (temp < in[i][j]){
-                temp = in[i][j];
-            }
+// 池化操作
+void my_pool(const int in[], int out[]){
+
+    int img[HEIGHT][WIDTH]; // 将输入流转换为二位矩阵
+    for(int i=0; i<HEIGHT; i++){
+        for(int j=0; j<WIDTH; j++){
+            img[i][j] = in[i*WIDTH + j];
         }
     }
-    return temp;
+
+    int temp;
+    int write_count = 0;
+
+    for(int j=0, tj=0; j<POOL_OUT_HEIGHT; j++, tj+=POOL_STRIDE){
+        for(int i=0, ti=0; i<POOL_OUT_WIDTH; i++, ti+=POOL_STRIDE){
+
+            temp = img[tj][ti];
+
+            // 最大池化
+            for(int oj=0; oj < POOL_SIZE; oj++){
+                for(int oi=0; oi < POOL_SIZE; oi++){
+                    if (bounds_ok(tj+oj, ti+oi)) {
+                        temp = std::max(temp, img[tj+oj][ti+oi]);
+                    }
+                }
+            }
+
+            out[write_count] = temp;
+            write_count++;
+        }
+    }
 }
 
-// 池化操作
-// 输出是大小为 (HEIGHT/2) * (WIDTH/2) 向上取整
-void my_pool(const int in[], int out[]){
-    // 同样设计一个line Buffer
-    int line_buf[POOL_SIZE-1][WIDTH];   // 行缓冲
-    int window[POOL_SIZE][POOL_SIZE];   // 池化核
-    int up[POOL_SIZE];                  // 上移缓存
 
-    memset(window, 0, sizeof(window));
-    memset(line_buf, 0, sizeof(line_buf));
-    memset(up, 0, sizeof(up));
-
-
+// 将流式输出转换为二位矩阵输出
+void printMat(const int in[], int h, int w){
+    for(int i=0; i<h; i++){
+        for(int j=0; j<w; j++){
+            printf("%d\t", in[i*w+j]);
+        }
+        printf("\n");
+    }
 }
-
 
 // 融合卷积和池化操作
 // 输入是图像大小
 // 输出是池化后大小
 void combine(const int in[], int out[]){
+    int temp[HEIGHT * WIDTH];
+    memset(temp, 0, sizeof(temp));
 
+    printf("原始矩阵：\n");
+    printMat(in, HEIGHT, WIDTH);
+
+    my_conv(in, temp);
+
+    printf("卷积输出：\n");
+    printMat(temp, HEIGHT, WIDTH);
+
+    my_pool(temp, out);
+
+    printf("池化结果：\n");
+    printMat(out, POOL_OUT_HEIGHT, POOL_OUT_WIDTH);
 }
+
+
 
 int main(){
 
-    // 创建一个 6*6的测试矩阵
+    // 准备数据，创建一个 6*6的测试矩阵
     int in[HEIGHT][WIDTH] = {
             {-5, -4, -3, -2, -1, 0,},
             {-4, -3, -2, -1, 0, 1,},
@@ -162,7 +198,7 @@ int main(){
     int out[HEIGHT * WIDTH];
     memset(out, 0, sizeof(out));
 
-    // 把in转化为单行矩阵
+    // 把in转化为单行矩阵(流)
     int a[HEIGHT * WIDTH];
     memset(a, 0, sizeof(a));
     for(int i=0; i<HEIGHT; i++){
@@ -171,15 +207,8 @@ int main(){
         }
     }
 
-    my_conv(a, out);
-
-    // 打印结果
-    for(int i=0; i<HEIGHT; i++){
-        for(int j=0; j<WIDTH; j++){
-            printf("%d, ", out[i*WIDTH+j]);
-        }
-        printf("\n");
-    }
+    // 合并操作
+    combine(a, out);
 
     return 0;
 }
