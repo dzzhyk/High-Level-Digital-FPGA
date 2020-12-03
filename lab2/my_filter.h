@@ -15,12 +15,10 @@
 #define POOL_OUT_WIDTH ((WIDTH - POOL_SIZE) / POOL_STRIDE + 1)
 
 
-// 顶层函数
 void filter_top(hls::stream<int>& in, hls::stream<int>& out);
 
 
-// 将流式输出转换为二位矩阵输出
-void printMat(hls::stream<int>& in, int h, int w){
+void my_printMat(hls::stream<int>& in, int h, int w){
     for(int i=0; i<h; i++){
         for(int j=0; j<w; j++){
             printf("%d\t", in.read());
