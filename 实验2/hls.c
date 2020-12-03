@@ -1,4 +1,5 @@
-#include "hls_stream.h"
+// #include "hls_stream.h"
+#include <stdio.h>
 
 #define WIN_SIZE 3 // must be odd
 #define HALF_SIZE (((WIN_SIZE) - 1) / 2)
@@ -37,8 +38,6 @@ void my_filter_buffer(hls::stream<int>& in_stream, hls::stream<int>& out_stream)
     #pragma HLS ARRAY_PARTITION variable=window complete dim=0
     #pragma HLS ARRAY_PARTITION variable=right complete
 
-    // 把初始值加入line buffer中
-    int read_count = WIDTH * HALF_SIZE + HALF_SIZE + 1;
 
     /**
      * 优化指令pragma HLS pipeline的作用是缩短C函数或C循环之内的指令触发间隔（initial interval，II）
@@ -51,6 +50,8 @@ void my_filter_buffer(hls::stream<int>& in_stream, hls::stream<int>& out_stream)
      * rewind （可选）使多次循环执行形成流水线，多次循环之间不产生时间间隔
      **/
 
+    // 把初始值加入line buffer中
+    int read_count = WIDTH * HALF_SIZE + HALF_SIZE + 1;
     buf_x1 : for (int x = WIDTH - HALF_SIZE - 1; x < WIDTH; x++)
     #pragma HLS PIPELINE
         line_buf[HALF_SIZE - 1][x] = in_stream.read();
@@ -101,3 +102,4 @@ void my_filter_buffer(hls::stream<int>& in_stream, hls::stream<int>& out_stream)
         }
     }
 }
+
