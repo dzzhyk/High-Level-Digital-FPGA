@@ -1,26 +1,29 @@
+#include "hls_stream.h"
 #include "filter.h"
-int in[HEIGHT][HEIGHT] = {
-		{0, 0, 0, 0},
-		{0, 3, 3, 0},
-		{0, 3, 3, 0},
-		{0, 0, 0, 0},
+
+int mat[HEIGHT][WIDTH] = {
+	{-5, -4, -3, -2, -1, 0,},
+	{-4, -3, -2, -1, 0, 1,},
+	{-3, -2, -1, 0, 1, 2,},
+	{-2, -1, 0, 1, 2, 3,},
+	{-1, 0, 1, 2, 3, 4,},
+	{0, 1, 2, 3, 4, 5,},
 };
 
-int out[HEIGHT][WIDTH];
+hls::stream<int> in;
+hls::stream<int> out;
 
 int main()
 {
-	int i, j;
-	my_filter_v1(in, out);
-	printf("float out[%d][%d]= { \n", HEIGHT, WIDTH);
-    for (i=0; i<HEIGHT; i++)
-    {
-    	printf("{");
-    	for (j=0;j<WIDTH;j++)
-    	{
-    		printf("%d,",out[i][j]);
-    	}
-    	printf("},\n");
-    }
-    printf("}\n");
+	// 准备数据
+	for(int i=0; i<HEIGHT; i++){
+		for(int j=0; j<WIDTH; j++){
+			in.write(mat[i][j]);
+		}
+	}
+
+	filter_top(in, out);
+
+    printf("结果：\n");
+    printMat(out, POOL_OUT_HEIGHT, POOL_OUT_WIDTH);
 }
