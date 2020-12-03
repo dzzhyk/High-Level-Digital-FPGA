@@ -17,14 +17,4 @@
 
 void filter_top(hls::stream<int>& in, hls::stream<int>& out);
 
-
-void my_printMat(hls::stream<int>& in, int h, int w){
-    for(int i=0; i<h; i++){
-        for(int j=0; j<w; j++){
-            printf("%d\t", in.read());
-        }
-        printf("\n");
-    }
-}
-
 #endif

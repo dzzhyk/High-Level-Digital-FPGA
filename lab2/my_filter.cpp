@@ -21,6 +21,14 @@ inline int conv(int window[WIN_SIZE][WIN_SIZE], int y, int x)
     return result;
 }
 
+void my_printMat(hls::stream<int>& in, int h, int w){
+    for(int i=0; i<h; i++){
+        for(int j=0; j<w; j++){
+            printf("%d\t", in.read());
+        }
+        printf("\n");
+    }
+}
 
 void my_conv(hls::stream<int>& in, hls::stream<int>& out) {
 
