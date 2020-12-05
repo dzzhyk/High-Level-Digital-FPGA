@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<vivadoHLSLog:LogRoot xmlns:vivadoHLSLog="www.xilinx.com/vivadoHLSLog">
+  <errorLogs>
+    <logs>
+      <synLog/>
+      <simLog/>
+      <mgLog/>
+      <packageLog/>
+      <csimLog/>
+    </logs>
+  </errorLogs>
+  <warningLogs>
+    <logs>
+      <synLog>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false intra dependency for variable 'linebuf.val[0].V' (conv/conv.cpp:37)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.689+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false inter dependency for variable 'linebuf.val[0].V' (conv/conv.cpp:37)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.489+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false intra dependency for variable 'pool_buffer.val[5].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.485+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false intra dependency for variable 'pool_buffer.val[2].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.481+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false intra dependency for variable 'pool_buffer.val[3].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.477+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false intra dependency for variable 'pool_buffer.val[7].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.473+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false intra dependency for variable 'pool_buffer.val[0].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.468+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false intra dependency for variable 'pool_buffer.val[4].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.463+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false intra dependency for variable 'pool_buffer.val[1].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.459+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false intra dependency for variable 'pool_buffer.val[6].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.454+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false inter dependency for variable 'pool_buffer.val[5].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.451+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false inter dependency for variable 'pool_buffer.val[2].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.447+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false inter dependency for variable 'pool_buffer.val[3].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.444+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false inter dependency for variable 'pool_buffer.val[7].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.440+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false inter dependency for variable 'pool_buffer.val[0].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.436+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false inter dependency for variable 'pool_buffer.val[4].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.433+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false inter dependency for variable 'pool_buffer.val[1].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.429+0800" type="Warning"/>
+        <logs message="WARNING: [ANALYSIS 214-52] Found false inter dependency for variable 'pool_buffer.val[6].V' (conv/conv.cpp:27)." projectName="conv" solutionName="solution1" date="2020-12-05T17:58:14.426+0800" type="Warning"/>
+      </synLog>
+      <simLog/>
+      <mgLog/>
+      <packageLog/>
+      <csimLog/>
+    </logs>
+  </warningLogs>
+</vivadoHLSLog:LogRoot>
