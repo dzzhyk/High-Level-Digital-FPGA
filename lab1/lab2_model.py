@@ -1,10 +1,14 @@
 from pulp import *
 import numpy as np
+import pandas as pd
 
 CHILD_NUMBER = 4  # 最大子节点数量
 NODE_LIST = []  # 节点列表
 ORIGIN_NODE_GRAPH = {}  # 原始图
-NEW_NODE_GRAPH = {}  # 结果图
+REVERSED_E_NODE_GRAPH = {}  # 反向边图
+latency = 1
+distance = 1
+
 
 class ChildNode:
     def __init__(self, node_id, edge_type):
@@ -40,6 +44,7 @@ class Node:
 def read(filename):
     with open(filename, "r", encoding="utf-8") as fin:
         print("<=== 读入文件：" + filename)
+
         temp = fin.readline()
         while temp != "":
             temp_ls = temp.split(",")
@@ -51,14 +56,54 @@ def read(filename):
             temp = fin.readline()
 
 
+def readXlsxData(filename="g8"):
+    edge_dict_order = {}
+    sn_ln_list = {}
+
+    with open(filename, "r", encoding="utf-8") as f:
+        print("<=== 读入文件：" + filename)
+
+        line = f.readline()
+        while line != "":
+            rawLine = line.strip("\n").split("\t")
+            subNodeList = []
+
+            sn_ln_list[int(rawLine[0])] = [int(rawLine[5]), int(rawLine[6])]
+
+            # if rawLine[8] == '0':
+            for subnode in range(1, 5):
+                if rawLine[subnode] != '0':
+                    subNodeList.append(int(rawLine[subnode]))
+            edge_dict_order[int(rawLine[0])] = subNodeList
+            # else:
+            #     edge_dict_reverse[int(rawLine[0])] = int(rawLine[1])
+            line = f.readline()
+
+    f.close()
+    pointNums = len(edge_dict_order)
+
+    maxTimeStep = 0
+    for i in range(pointNums):
+        maxTimeStep = max(sn_ln_list[pointNums][1], maxTimeStep)
+
+    maxTimeStep += 1
+
+    return edge_dict_order, sn_ln_list, pointNums, maxTimeStep
+
+
 # 输出函数
-def write(filename):
+def write(filename, res):
     with open(filename, "w", encoding="utf-8") as fout:
         print("===> 输出目标：" + filename)
-        for node in NODE_LIST:
-            fout.write(str(node))
-        for node in NODE_LIST:
-            fout.write(node.toFile())
+
+        for jj in res:
+            for ii in jj:
+                fout.write(str(ii)+" ")
+            fout.write("\n")
+        # for node in NODE_LIST:
+        #     fout.write(str(node))
+        # for node in NODE_LIST:
+        #     fout.write(node.toFile())
 
 
 # 预处理输入数据得到原始图
@@ -110,6 +155,7 @@ def generateModelAndVariables(pointNums, maxTimeStep, maxPE):
             new_z_array.append(new_z_line)
         z_variable_array.append(new_z_array)
 
+    # print(x_variable_array)
     pe = LpVariable("pe", lowBound=0, upBound=maxPE, cat=LpInteger)
 
     return model, x_variable_array, y_variable_array, z_variable_array, pe
@@ -124,32 +170,39 @@ def readSnLn():
     return node_sn_ln_dict
 
 
-def addUniqueConstraint(model, xV, pointNums, nodeTimeStepDict):  # 唯一性
+def addUniqueConstraint(model, xV, pointNums, nodeTimeStepDict, maxTimeStep):  # 唯一性
     for p in range(pointNums):
-        Sn, Ln = nodeTimeStepDict[p+1][0], nodeTimeStepDict[p+1][1]
+        Sn, Ln = nodeTimeStepDict[p + 1][0], nodeTimeStepDict[p + 1][1]
 
         sum_x_ptt = 0
         if nodeTimeStepDict[p + 1][0] == nodeTimeStepDict[p + 1][1]:
             for t in range(maxTimeStep):
-                if t == nodeTimeStepDict[p+1][0]:
+                if t == nodeTimeStepDict[p + 1][0]:
                     model += xV[p][t][t] == 1
                 else:
                     model += xV[p][t][t] == 0
         else:
-            for t in range(Sn, Ln+1):
+            for t in range(Sn, Ln + 1):
                 sum_x_ptt += xV[p][t][t]
             model += sum_x_ptt == 1
 
     return model
 
 
-def addNotAllowOthersConstraint(model, xV, pointNums, maxTimeStep, nodeTimeStepDict):  # 排他性
+def addNotAllowOthersConstraint(model, xV, yV, zV, pointNums, maxTimeStep, nodeTimeStepDict):  # 排他性
     for p in range(pointNums):
         for firstNodeTime in range(maxTimeStep):
             for nextNodeTime in range(maxTimeStep):
                 if firstNodeTime != nextNodeTime:
                     for routingTime in range(maxTimeStep):
-                        model += xV[p][firstNodeTime][firstNodeTime] + xV[p][nextNodeTime][routingTime] <= 1
+                        if routingTime < nodeTimeStepDict[p + 1][0] or routingTime > nodeTimeStepDict[p + 1][1]:
+                            model += xV[p][nextNodeTime][routingTime] == 0
+                            model += yV[p][nextNodeTime][routingTime] == 0
+                            model += zV[p][nextNodeTime][routingTime] == 0
+                        else:
+                            model += xV[p][firstNodeTime][firstNodeTime] + xV[p][nextNodeTime][routingTime] <= 1
+                            model += yV[p][firstNodeTime][firstNodeTime] + yV[p][nextNodeTime][routingTime] <= 1
+                            model += zV[p][firstNodeTime][firstNodeTime] + zV[p][nextNodeTime][routingTime] <= 1
 
     # for p in range(pointNums):
     #     if nodeTimeStepDict[p+1][0] == nodeTimeStepDict[p+1][1]:
@@ -162,12 +215,12 @@ def addNotAllowOthersConstraint(model, xV, pointNums, maxTimeStep, nodeTimeStepD
     return model
 
 
-def PECantWithMemoryConstraint(model, pointNums):  # PE与memory路由互斥
+def PECantWithMemoryConstraint(model, pointNums, nodeTimeStepDict, xList, yList):  # PE与memory路由互斥
 
     for p in range(pointNums):
         Sn, Ln = nodeTimeStepDict[p + 1][0], nodeTimeStepDict[p + 1][1]
-        for timeStep in range(Sn, Ln+1):
-            for j1 in range(Sn+1, Ln):
+        for timeStep in range(Sn, Ln + 1):
+            for j1 in range(Sn + 1, Ln):
                 for j2 in range(Sn + 1, Ln):
                     model += xList[p][timeStep][j1] + yList[p][timeStep][j2] <= 1
 
@@ -177,15 +230,15 @@ def PECantWithMemoryConstraint(model, pointNums):  # PE与memory路由互斥
 def LoadStoreBondCons(model, yList, zList, pointNums, nodeTimeStepDict):
     for p in range(pointNums):
         Sn, Ln = nodeTimeStepDict[p + 1][0], nodeTimeStepDict[p + 1][1]
-        for timeStep in range(Sn, Ln+1):
-            for j1 in range(Sn+1, Ln):
-                for j2 in range(j1 + 1, Ln):
+        for timeStep in range(Sn, Ln + 1):
+            for j1 in range(Sn + 1, Ln):
+                for j2 in range(Sn + 1, Ln):
                     model += yList[p][timeStep][j1] - zList[p][timeStep][j2] == 0
 
     return model
 
 
-def PENumsCons(model, pe, pointNums, xList, yList, zList, maxTimeStep, II):
+def PENumsCons(model, pe, pointNums, xList, yList, zList, maxTimeStep, II, nodeTimeStepDict):
     for iiTime in range(II):
         sum_xyz = 0
         for p in range(pointNums):
@@ -194,18 +247,18 @@ def PENumsCons(model, pe, pointNums, xList, yList, zList, maxTimeStep, II):
             # print("t/ii")
             # print(int(maxTimeStep/II))
             for t in range(Sn, maxTimeStep):
-                for times in range(int(maxTimeStep/II)+1):
+                for times in range(int(maxTimeStep / II) + 1):
                     # if Sn < times*II+iiTime < Ln:
                     if times * II + iiTime < maxTimeStep:
-                        sum_xyz += xList[p][t][times*II+iiTime]
-                        # sum_xyz += yList[p][t][times*II+iiTime]
-                        # sum_xyz += zList[p][t][times*II+iiTime]
+                        sum_xyz += xList[p][t][times * II + iiTime]
+                        sum_xyz += yList[p][t][times * II + iiTime]
+                        sum_xyz += zList[p][t][times * II + iiTime]
         # print(sum_xyz)
         model += sum_xyz <= pe
     return model
 
 
-def addDependenceCons(model, G):
+def addDependenceCons(model, G, xList, nodeTimeStepDict):
     # Dependence 1:
 
     global latest_Ln
@@ -218,14 +271,14 @@ def addDependenceCons(model, G):
             Sn_c, Ln_c = nodeTimeStepDict[int(childNode)][0], nodeTimeStepDict[int(childNode)][1]
 
             sum_child = 0
-            for i2 in range(Sn_c, Ln_c+1):
-                sum_child += i2 * xList[int(childNode)-1][i2][i2]
-            for i1 in range(Sn_f, Ln_f+1):
-                for j1 in range(Sn_f, Ln_f+1):
-                    model += i1*xList[int(fatherNode)-1][i1][j1] + 1 <= sum_child  # + 1
+            for i2 in range(Sn_c, Ln_c + 1):
+                sum_child += i2 * xList[int(childNode) - 1][i2][i2]
+            for i1 in range(Sn_f, Ln_f + 1):
+                for j1 in range(Sn_f, Ln_f + 1):
+                    model += i1 * xList[int(fatherNode) - 1][i1][j1] + 1 <= sum_child  # + 1
 
     # Dependence 2
-    model1 = LpProblem("prob", LpMinimize)
+    # model1 = LpProblem("prob", LpMinimize)
     for fatherNode in G:
 
         Sn_f, Ln_f = nodeTimeStepDict[int(fatherNode)][0], nodeTimeStepDict[int(fatherNode)][1]
@@ -249,22 +302,26 @@ def addDependenceCons(model, G):
                     latest_child = childNode
             for i2 in range(latest_Sn, latest_Ln):
                 for i1 in range(Sn_f, i2):
-                    for j1 in range(i1, i2):
-                        model  += j1 * xList[int(fatherNode) - 1][i1][j1] + 1 <= i2 * xList[int(latest_child) - 1][i2][i2]
-                        model1 += j1 * xList[int(fatherNode) - 1][i1][j1] + 1 <= i2 * xList[int(latest_child) - 1][i2][i2]
-    print("==============================model1===============================")
-    print(model1)
+                    for j1 in range(Sn_f, i2):
+                        # for i2 in range(latest_Ln):
+                        #     for i1 in range(Ln_f):
+                        #         for j1 in range(Ln_f):
+                        model += j1 * xList[int(fatherNode) - 1][i1][j1] + 1 <= i2 * xList[int(latest_child) - 1][i2][
+                            i2]
+    #  model1 += j1 * xList[int(fatherNode) - 1][i1][j1] + 1 <= i2 * xList[int(latest_child) - 1][i2][i2]
+    # print("==============================model1===============================")
+    # print(model1)
     return model
 
 
-def addTargetFunc(model, xList, yList, zList, alpha, G, nPE, pointNums):
+def addTargetFunc(model, xList, yList, zList, alpha, G, nPE, nodeTimeStepDict):
     nins = 0
     for node in G:
         Sn, Ln = nodeTimeStepDict[int(node)][0], nodeTimeStepDict[int(node)][1]
         for time in range(Sn, Ln):
             for j in range(time, Ln):
-                nins += xList[int(node)-1][time][j] + \
-                        alpha*(yList[int(node)-1][time][j] + zList[int(node)-1][time][j])
+                nins += xList[int(node) - 1][time][j] + \
+                        alpha * (yList[int(node) - 1][time][j] + zList[int(node) - 1][time][j])
 
     beta = 0
     checkedList = []
@@ -289,52 +346,102 @@ def addTargetFunc(model, xList, yList, zList, alpha, G, nPE, pointNums):
                 checkedList.append(father)
     print("beta")
     print(beta)
-    # model += beta*nPE - nins
-    model += nPE
+    print("nins")
+    print(nins)
+    model += beta * nPE - nins
+    # model += nPE
     return model
 
 
-def computingII():
+def computingII(nPE, pointNum):  # Revered_e_graph:类似origin graph：父子节点边，不过是反向边
+    ResMii = np.ceil(pointNum / nPE)
+    RecMii = np.ceil(latency / distance)
+    print(pointNum)
+    print(ResMii)
+    int(max(ResMii, RecMii))
+    return int(max(ResMii, RecMii))
 
 
+def test(filename="g8"):
+    alpha = 2
+    maxPE = 16
 
-    return II
+    edge_dict_order, sn_ln_list, pointNums, maxTimeStep = readXlsxData(filename)
+
+    II = 5 #computingII(maxPE, pointNums)
+
+    model, xList, yList, zList, pe = generateModelAndVariables(pointNums, maxTimeStep, maxPE)
+    # nodeTimeStepDict = readSnLn()
+    # print(nodeTimeStepDict)
+    model = addUniqueConstraint(model, xList, pointNums, sn_ln_list, maxTimeStep)
+
+    model = addNotAllowOthersConstraint(model, xList, yList, zList, pointNums, maxTimeStep, sn_ln_list)
+    model = PENumsCons(model, pe, pointNums, xList, yList, zList, maxTimeStep, II, sn_ln_list)
+    model = LoadStoreBondCons(model, yList, zList, pointNums, sn_ln_list)
+    model = PECantWithMemoryConstraint(model, pointNums, sn_ln_list, xList, yList)
+    model = addDependenceCons(model, edge_dict_order, xList, sn_ln_list)
+    # print(model)
+    model = addTargetFunc(model, xList, yList, zList, alpha, edge_dict_order, pe, sn_ln_list)
+    model.solve()
+
+    print("=========================输出结果=========================")
+    print(pe.varValue)
+    res = []
+
+    for fatherNode in range(pointNums):
+        nodeList = []
+        for fatherTimeStep in range(maxTimeStep):
+            if xList[fatherNode][fatherTimeStep][fatherTimeStep].varValue == 1:
+                nodeList.append(len(res) + 1)
+                print(fatherNode + 1, "时间步", fatherTimeStep)
+                nodeList.append(fatherTimeStep)
+                for child in range(4):
+                    if len(edge_dict_order[fatherNode + 1]) > child:
+                        nodeList.append(edge_dict_order[fatherNode + 1][child])
+                    else:
+                        nodeList.append(0)
+                nodeList.append(0)
+                nodeList.append(fatherNode + 1)
+
+        if nodeList:
+            res.append(nodeList)
+
+    for fN in range(pointNums):
+        for cN in edge_dict_order[fN+1]:
+
+            childT = res[cN-1][1]  # 在子节点调度之前都要有路由，如果大于2
+
+            for routingTime in range(res[fN][1] + 1, childT):
+
+                routing_node = [len(res) + 1, routingTime]
+                for child in range(4):
+                    if len(edge_dict_order[fN + 1]) > child:
+                        routing_node.append(edge_dict_order[fN + 1][child])
+                    else:
+                        routing_node.append(0)
+                routing_node.append(1)
+                routing_node.append(fN + 1)
+                print("路由1", fN + 1, "时间步", routingTime)
+                res.append(routing_node)
+
+    # for fN in range(pointNums):
+    #     for i in range(maxTimeStep):
+    #         for j in range(maxTimeStep):
+    #             if yList[fN][i][j] == 1:
+    #                 print(fN, "store", j)
+    #             if zList[fN][i][j] == 1:
+    #                 print(fN, "load", j)
+
+    for jj in res:
+        for ii in jj:
+            print(ii, end=" ")
+        print()
+    write("./out", res)
 
 
 if __name__ == '__main__':
-    pointNums = 11
-    maxTimeStep = 8
-    alpha = 2
-    II = 3
-    maxPE = 16
+    test("g35")
 
-    read("./in")
-    write("./out")
-    pre()  # 预处理得到精简图
-    printG(ORIGIN_NODE_GRAPH)
-    print(NEW_NODE_GRAPH)
-
-    model, xList, yList, zList, pe = generateModelAndVariables(pointNums, maxTimeStep, maxPE)
-    nodeTimeStepDict = readSnLn()
-    print(nodeTimeStepDict)
-    model = addUniqueConstraint(model, xList, pointNums, nodeTimeStepDict)
-
-    model = addNotAllowOthersConstraint(model, xList, pointNums, maxTimeStep, nodeTimeStepDict)
-    model = PENumsCons(model, pe, pointNums, xList, yList, zList, maxTimeStep, II)
-    # model = LoadStoreBondCons(model, yList, zList, pointNums, nodeTimeStepDict)
-    # model = PECantWithMemoryConstraint(model, pointNums)
-    model = addDependenceCons(model, ORIGIN_NODE_GRAPH)
-    print(model)
-    model = addTargetFunc(model, xList, yList, zList, alpha, ORIGIN_NODE_GRAPH, pe, pointNums)
-    model.solve()
-    print("=========================输出结果=========================")
-    print(pe.varValue)
-    for i in range(pointNums):
-        timeList = []
-        for j in range(maxTimeStep):
-            timeList.append(j * xList[i][j][j].varValue)
-        temp_step = int(sum(timeList))
-        # 把结果添加到NODE_LIST中的节点信息中
-        NODE_LIST[i].t_step = temp_step
-        print(f"{i + 1} 节点时间步是 {temp_step}")
-
+    # read("./in")
+    # pre()  # 预处理得到精简图
+    # printG(ORIGIN_NODE_GRAPH)
