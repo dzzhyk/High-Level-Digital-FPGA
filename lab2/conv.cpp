@@ -1,378 +1,181 @@
-#include <cstdio>
-#include <cstring>
-#include <algorithm>
-#include <iostream>
-
+#include "conv.h"
 using namespace std;
 
-#define TOTAL 100
-#define INF 0x3f3f3f3f
-#define WIN_SIZE 3
-#define WIDTH 8
-#define HEIGHT 8
-#define HALF_SIZE (((WIN_SIZE) - 1) / 2)
-#define CHANNEL 1
+/**
+ * @author: dzzhyk
+ * @since: 2020-12-05 10:36:41
+ */
 
-#define CONV_HEIGHT (HEIGHT-HALF_SIZE*2)
-#define CONV_WIDTH (WIDTH-HALF_SIZE*2)
+//#define MY_TEST
 
-#define POOL_SIZE 2
-#define POOL_STRIDE 2
-#define POOL_OUT_HEIGHT ((CONV_HEIGHT - POOL_SIZE) / POOL_STRIDE + 1)
-#define POOL_OUT_WIDTH ((CONV_WIDTH - POOL_SIZE) / POOL_STRIDE + 1)
-
-
-// ÊòØÂê¶Âú®ÂõæÂÉèËåÉÂõ¥ÂÜÖ
-int bounds_ok(const int y, int x)
-{
-    return (0 <= y && y < HEIGHT && 0 <= x && x < WIDTH);
+// ≈–∂œ «∑Ò∑˚∫œ±ﬂΩÁ
+inline bool bounds_ok (const short row, const short col){
+	return (1 <= row && row <= 6 && 1 <= col && col <= 6);
 }
 
-// ÂÆö‰πâ‰∫Ü‰∏Ä‰∏™Âç∑ÁßØÊ†∏
-// Ê≥®ÊÑèÔºöÂç∑ÁßØÊ†∏ÊØîËæÉÁÆÄÂçïÔºåÊâÄÊúâÈÄöÈÅìÈÉΩÁõ∏ÂêåÁöÑ
-const int kernel[WIN_SIZE][WIN_SIZE] = {
-        {0, 0, 0},
-		{0, 1, 0},
-		{0, 0, 0},
-};
-
-/** Âç∑ÁßØÊìç‰Ωú
- *  ËøôÈáåÂ¶ÇÊûúÊòØ3*3ÔºåÂàô‰ΩøÁî®ÁöÑÂç∑ÁßØÊ†∏Â¶Ç‰∏ã
- * -2  -1  0
- * -1  0   1
- *  0  1   2
- *
- * Â∫îËØ•ÊòØÁî®Êù•Ê£ÄÊµã45Â∫¶ËßíÁöÑ
- **/
-int conv(int window[WIN_SIZE][WIN_SIZE], int y, int x)
+// 2dæÌª˝≤Ÿ◊˜
+inline dout_t conv2D(din_t win[3][3], din_t wei[16*3*3], short channel)
 {
-    int result = 0;
-
-    for (int i = -HALF_SIZE; i <= HALF_SIZE; i++)
-        for (int j = -HALF_SIZE; j <= HALF_SIZE; j++)
-            if (bounds_ok(y + i, x + j) == 1) {
-                result += window[i + HALF_SIZE][j + HALF_SIZE] * kernel[i + HALF_SIZE][j + HALF_SIZE];
-            }
+	dout_t result = (dout_t)0;
+	inner_conv2d_i:
+	for(short i=0; i<3; ++i)
+		inner_conv2d_j:
+		for (short j=0; j<3; ++j)
+			result += win[i][j] * wei[channel * 9 + i*WIN_SIZE + j];
 
     return result;
 }
 
 
+void my_engine(din_t img[16*8*8], din_t weight[16*3*3], dout_t out[3*3])
+{
 
-// Âç∑ÁßØËøêÁÆó
-void my_conv(const int in[], int out[]) {
+	// ≥ı ºªØ”√”⁄≥ÿªØµƒpool_bufferª∫¥Ê
+	hls::LineBuffer<POOL_BUFFER_SIZE, 1, dout_t> pool_buffer;
+	pool_buffer_init:
+	for(short i=0; i<POOL_BUFFER_SIZE; i++)
+		pool_buffer(i, 0) = (dout_t)0;
 
-    int line_buf[WIN_SIZE - 1][WIDTH];  // 2Ë°åWIDTHÂÆΩ
-    int window[WIN_SIZE][WIN_SIZE];     // Âç∑ÁßØÊ†∏
-    int up[WIN_SIZE];                   // ‰∏äÁßªÁºìÂ≠ò
+	int pool_buffer_size;  // µ±«∞‘™Àÿ ˝¡ø
 
-    memset(window, 0, sizeof(window));
-    memset(line_buf, 0, sizeof(line_buf));
-    memset(up, 0, sizeof(up));
+	// conv_total”√”⁄º«¬ºµ±«∞≤˙…˙¡À∂‡…Ÿ∏ˆæÌª˝Ω·π˚
+	int conv_total;
 
-    // Â∑≤ÁªèËØªÂÖ•ÁöÑÊï∞Èáè
-    int read_count = 0;
+	// ≥ı ºªØÀ˘”–Õ®µ¿µƒline_buffer[16]
+	hls::LineBuffer<2, WIDTH, din_t> linebuf[16];
+	linebuf_init:
+	for(short channel=0; channel < CHANNEL; channel++){
+		linebuf_init_area:
+		{
+			linebuf_init_1:
+			for(short i=0; i<2; i++){
+				linebuf[channel](0, i) = img[channel * 64 + i];
+				linebuf[channel](1, i) = img[channel * 64 + WIDTH + i];
+			}
+			linebuf_init_2:
+			for(short i=2; i<WIDTH; i++){
+				linebuf[channel](0, i) = (din_t)0;
+				linebuf[channel](1, i) = img[channel * 64 + i];
+			}
+		}
+	}
 
-    // ÂàùÂßãÂåñ
-    for(int i=0; i<2; i++)
-        line_buf[0][i] = in[i];
-    for(int i = 2; i < WIDTH; i++)
-        line_buf[1][i] = in[i];
-    for(int i=0; i<2; i++){
-        line_buf[1][i] = in[WIDTH + i];
-    }
+	// ≥ı ºªØÀ˘”–Õ®µ¿µƒwindow[16]
+	hls::Window<3, 3, din_t> window[16];
+	window_init:
+	for(short channel=0; channel < CHANNEL; channel++){
+		window_init_1:
+		for (short i=0; i<3; i++){
+			window_init_1_1:
+			for (short j=0; j<3; j++)
+				if (i==0 || j==0){
+					window[channel](i, j) = (din_t)0;
+				}else{
+					window[channel](i, j) = img[channel * 64 + (i-1)*WIDTH + j];
+				}
+		}
+	}
 
-    // ÂàùÂßãÂåñÂÆåÊàê
-    read_count = WIDTH + HALF_SIZE + 1;
+	// À˘”–Õ®µ¿µƒ–¬œÒÀÿ
+	din_t new_pixel[CHANNEL];
+	new_pixel_init:
+	for(short channel=0; channel < CHANNEL; channel++)
+		new_pixel[channel] = (din_t)0;
 
-    // ÊääÂàùÂßãÂÉèÁ¥†Â§çÂà∂ËøõÂÖ•Á™óÂè£
-    for (int y = 0; y <= HALF_SIZE; y++)
-        for (int x = 0; x <= HALF_SIZE; x++)
-            window[y+1][x+1] = line_buf[y][x];
+	// read_countº«¬ºµ±«∞∂¡»°¡À∂‡…ŸœÒÀÿ
+	short read_count = 10;
+	pool_buffer_size = 0;
 
-    // ËÆ∞ÂΩïËæìÂá∫‰ΩçÁΩÆ
-    int write_count = 0;
+	// ƒø«∞“—æ≠–¥»Îout∂‡…Ÿ∏ˆ
+	short pool_count = 0;
 
-    // ÂºÄÂßãÂç∑ÁßØ
-    for (int y = 0; y < HEIGHT; y++) {
-        for (int x = 0; x < WIDTH; x++) {
+	conv_total = 0;
 
-            // ÊâßË°åÂç∑ÁßØ
-            int val_out = conv(window, y, x);
+	main_conv_row:
+	for (short row=0; row < HEIGHT; row++) {
+		main_conv_col:
+		for (short col=0; col < WIDTH; col++) {
 
-            if (1 <= y && y <= CONV_HEIGHT && 1 <= x && x <= CONV_WIDTH) {
-                out[write_count] = val_out;
-                write_count++;
-            }
+			if (bounds_ok(row, col)) {
+				// ∂‘À˘”–Õ®µ¿Ω¯––æÌª˝≤Ÿ◊˜£¨≤¢«“º”∫ÕÀ˘”–Õ®µ¿µƒΩ·π˚
+				dout_t conv_out = (dout_t)0;
 
-            // ËØªËøõËæìÂÖ•ÂÄº
-            int val_in = 0;
-            if (read_count < HEIGHT * WIDTH)
-            {
-                val_in = in[read_count];
-                read_count++;
-            }
-            // ÂáÜÂ§áÊúÄÂè≥‰æßÁöÑÁºìÂ≠òup
-            up[0] = line_buf[0][(x+HALF_SIZE+1) % WIDTH];
-            up[1] = line_buf[0][(x+HALF_SIZE+1) % WIDTH] = line_buf[1][(x+HALF_SIZE+1) % WIDTH];
-            up[2] = line_buf[1][(x+HALF_SIZE+1) % WIDTH] = val_in;
+				do_conv2d_loop:
+				for (short channel=0; channel < CHANNEL; channel++){
+					conv_out += conv2D(window[channel].val, weight, channel);
+				}
+				conv_total++;
 
-            // ÊääÁ™óÂè£Èô§‰∫ÜÊúÄÂè≥‰∏ÄÂàóÂæÄÂ∑¶Áßª1‰Ωç
-            for (int m = 0; m < WIN_SIZE; m++)
-                for (int n = 0; n < WIN_SIZE - 1; n++)
-                    window[m][n] = window[m][n + 1];
+				// Ω´æÌª˝Ω·π˚º”»ÎµΩ≥ÿªØbufferŒ≤≤ø
+				pool_buffer.shift_up(0);
+				pool_buffer(7, 0) = conv_out;
+				pool_buffer_size++;
 
-            // Êõ¥Êñ∞ÊúÄÂè≥‰∏ÄÂàóÁ™óÂè£ÂÄº
-            for (int i = 0; i < WIN_SIZE; i++)
-                window[i][WIN_SIZE - 1] = up[i];
-        }
-    }
-}
+				// »Áπ˚ø…“‘Ω¯––≥ÿªØ≤Ÿ◊˜£¨≤¢«“º«¬ºΩ¯»Îout
+				if ((row&1)==0 && (col&1)==0 && pool_buffer_size == POOL_BUFFER_SIZE){
 
-// Ê±†ÂåñÊìç‰Ωú
-void my_pool(const int in[], int out[]){
+					dout_t result = pool_buffer(0, 0);
+					result = pool_buffer(1, 0) > result? pool_buffer(1, 0) : result;
+					result = pool_buffer(6, 0) > result? pool_buffer(6, 0) : result;
+					result = pool_buffer(7, 0) > result? pool_buffer(7, 0) : result;
+					out[pool_count] = result;
 
-    int img[CONV_HEIGHT][CONV_WIDTH]; // Â∞ÜËæìÂÖ•ÊµÅËΩ¨Êç¢‰∏∫‰∫å‰ΩçÁü©Èòµ
-    for(int i=0; i<CONV_HEIGHT; i++){
-        for(int j=0; j<CONV_WIDTH; j++){
-            img[i][j] = in[i*CONV_WIDTH + j];
-        }
-    }
-
-    int temp;
-    int write_count = 0;
-
-    for(int j=0, tj=0; j<POOL_OUT_HEIGHT; j++, tj+=POOL_STRIDE){
-        for(int i=0, ti=0; i<POOL_OUT_WIDTH; i++, ti+=POOL_STRIDE){
-
-            temp = img[tj][ti];
-
-            // ÊúÄÂ§ßÊ±†Âåñ
-            for(int oj=0; oj < POOL_SIZE; oj++){
-                for(int oi=0; oi < POOL_SIZE; oi++){
-                    if (bounds_ok(tj+oj, ti+oi)) {
-                        temp = max(temp, img[tj+oj][ti+oi]);
-                    }
-                }
-            }
-
-            out[write_count] = max(out[write_count], temp);
-            write_count++;
-        }
-    }
-}
+					pool_buffer_size -= POOL_SIZE;
+					pool_count++;
+				}else if(row != 1 && (row&1)==1 && (col&1)==0 && pool_buffer_size == POOL_BUFFER_SIZE){
+					// »Áπ˚ «∆Ê ˝––
+					pool_buffer_size -= POOL_SIZE;
+				}
+			}
 
 
-// Â∞ÜÊµÅÂºèËæìÂá∫ËΩ¨Êç¢‰∏∫‰∫å‰ΩçÁü©ÈòµËæìÂá∫
-void printMat(const int in[], int h, int w){
-    for(int i=0; i<h; i++){
-        for(int j=0; j<w-1; j++){
-            cout << in[i*w+j] << " ";
-        }
-        cout << in[i*w+w-1] << endl;
-    }
-}
+			// ªÒ»°À˘”–Õ®µ¿µƒ–¬œÒÀÿ
+			if (read_count < HEIGHT * WIDTH){
+				new_pixel_update:
+				for(short channel=0; channel < CHANNEL; channel++){
+					new_pixel[channel] = img[channel * 64 + read_count];
+				}
+				read_count++;
+			}
 
-// ËûçÂêàÂç∑ÁßØÂíåÊ±†ÂåñÊìç‰Ωú
-// ËæìÂÖ•ÊòØÂõæÂÉèÂ§ßÂ∞è
-// ËæìÂá∫ÊòØÊ±†ÂåñÂêéÂ§ßÂ∞è
-void combine(const int in[], int out[]) {
+			window_loop_area:
+			{
+				// À˘”–Õ®µ¿µƒwindowƒ⁄»›◊Û“∆1≤Ω
+				window_shift_left:
+				for(short channel=0; channel < CHANNEL; channel++){
+					window[channel].shift_left();
+				}
 
-    int temp[CONV_HEIGHT * CONV_WIDTH];
+				// ÃÓ≥‰À˘”–Õ®µ¿µƒwindowµƒ◊Ó”“≤‡1¡–
+				window_right:
+				for(short channel=0; channel < CHANNEL; channel++){
+					window_right_1:
+					for (short i=0; i<2; i++){
 
-    for (int i = 0; i < CHANNEL; i++) {
-        memset(temp, 0, sizeof(temp));
+						// ¥”linebuf÷–»°≥ˆ–Ë“™ÃÓ»Îµƒ÷µgetval(i, col)
+						// col = WIN_SIZE-1 ±Ì æ◊Ó”“≤‡
+						din_t temp = linebuf[channel](i,(col+2) % WIDTH);
+						window[channel](i, 2) = temp;
+					}
+				}
 
-        // Ëé∑ÂèñÂΩìÂâçchannelÁöÑÁü©Èòµ
-        int a[HEIGHT * WIDTH];
-        memset(a, 0, sizeof(a));
-        for (int j = 0; j < (HEIGHT * WIDTH); j++) {
-            a[j] = in[i * (WIDTH * HEIGHT) + j];
-        }
+				window_update_new:
+				// ∞—√ø∏ˆÕ®µ¿µƒ–¬œÒÀÿº”»Î√ø∏ˆÕ®µ¿µƒwindowµƒ”“œ¬Ω«
+				for(short channel=0; channel < CHANNEL; channel++)
+					window[channel](2, 2) = new_pixel[channel];
+			}
 
-       printf("Input Matrix:\n");
-       printMat(a, HEIGHT, WIDTH);
+			linebuf_loop_area:
+			{
+				linebuf_shift_up:
+				// ∏¸–¬À˘”–Õ®µ¿µƒlinebuf
+				for(short channel=0; channel < CHANNEL; channel++)
+					linebuf[channel].shift_up( (col+2)%WIDTH );
 
-        my_conv(a, temp);
-
-       printf("Conv2D Output:\n");
-       printMat(temp, CONV_HEIGHT, CONV_WIDTH);
-
-        my_pool(temp, out);
-
-
-    }
-
-   printf("Max pooling Output:\n");
-    printMat(out, POOL_OUT_HEIGHT, POOL_OUT_WIDTH);
-}
-
-int mat[16][8][8] = {
-
-	{{41,35, 190, 132, 225, 108, 214, 174},
-	{82, 144, 73, 241, 241, 187, 233, 235},
-	{179, 166, 219, 60, 135, 12, 62, 153},
-	{36, 94, 13, 28, 6, 183, 71, 222},
-	{179, 18, 77, 200, 67, 187, 139, 166},
-	{31, 3, 90, 125, 9, 56, 37, 31},
-	{93, 212, 203, 252, 150, 245, 69, 59},
-	{19, 13, 137, 10, 28, 219, 174, 50}},
-
-	{{41,35, 190, 132, 225, 108, 214, 174},
-    {82, 144, 73, 241, 241, 187, 233, 235},
-    {179, 166, 219, 60, 135, 12, 62, 153},
-    {36, 94, 13, 28, 6, 183, 71, 222},
-    {179, 18, 77, 200, 67, 187, 139, 166},
-    {31, 3, 90, 125, 9, 56, 37, 31},
-    {93, 212, 203, 252, 150, 245, 69, 59},
-    {19, 13, 137, 10, 28, 219, 174, 50}},
-    {{41,35, 190, 132, 225, 108, 214, 174},
-	{82, 144, 73, 241, 241, 187, 233, 235},
-	{179, 166, 219, 60, 135, 12, 62, 153},
-	{36, 94, 13, 28, 6, 183, 71, 222},
-	{179, 18, 77, 200, 67, 187, 139, 166},
-	{31, 3, 90, 125, 9, 56, 37, 31},
-	{93, 212, 203, 252, 150, 245, 69, 59},
-	{19, 13, 137, 10, 28, 219, 174, 50}},
-	{{41,35, 190, 132, 225, 108, 214, 174},
-    {82, 144, 73, 241, 241, 187, 233, 235},
-    {179, 166, 219, 60, 135, 12, 62, 153},
-    {36, 94, 13, 28, 6, 183, 71, 222},
-    {179, 18, 77, 200, 67, 187, 139, 166},
-    {31, 3, 90, 125, 9, 56, 37, 31},
-    {93, 212, 203, 252, 150, 245, 69, 59},
-    {19, 13, 137, 10, 28, 219, 174, 50}},
-    {{41,35, 190, 132, 225, 108, 214, 174},
-	{82, 144, 73, 241, 241, 187, 233, 235},
-	{179, 166, 219, 60, 135, 12, 62, 153},
-	{36, 94, 13, 28, 6, 183, 71, 222},
-	{179, 18, 77, 200, 67, 187, 139, 166},
-	{31, 3, 90, 125, 9, 56, 37, 31},
-	{93, 212, 203, 252, 150, 245, 69, 59},
-	{19, 13, 137, 10, 28, 219, 174, 50}},
-	{{41,35, 190, 132, 225, 108, 214, 174},
-    {82, 144, 73, 241, 241, 187, 233, 235},
-    {179, 166, 219, 60, 135, 12, 62, 153},
-    {36, 94, 13, 28, 6, 183, 71, 222},
-    {179, 18, 77, 200, 67, 187, 139, 166},
-    {31, 3, 90, 125, 9, 56, 37, 31},
-    {93, 212, 203, 252, 150, 245, 69, 59},
-    {19, 13, 137, 10, 28, 219, 174, 50}},
-    {{41,35, 190, 132, 225, 108, 214, 174},
-	{82, 144, 73, 241, 241, 187, 233, 235},
-	{179, 166, 219, 60, 135, 12, 62, 153},
-	{36, 94, 13, 28, 6, 183, 71, 222},
-	{179, 18, 77, 200, 67, 187, 139, 166},
-	{31, 3, 90, 125, 9, 56, 37, 31},
-	{93, 212, 203, 252, 150, 245, 69, 59},
-	{19, 13, 137, 10, 28, 219, 174, 50}},
-	{{41,35, 190, 132, 225, 108, 214, 174},
-    {82, 144, 73, 241, 241, 187, 233, 235},
-    {179, 166, 219, 60, 135, 12, 62, 153},
-    {36, 94, 13, 28, 6, 183, 71, 222},
-    {179, 18, 77, 200, 67, 187, 139, 166},
-    {31, 3, 90, 125, 9, 56, 37, 31},
-    {93, 212, 203, 252, 150, 245, 69, 59},
-    {19, 13, 137, 10, 28, 219, 174, 50}},
-    {{41,35, 190, 132, 225, 108, 214, 174},
-	{82, 144, 73, 241, 241, 187, 233, 235},
-	{179, 166, 219, 60, 135, 12, 62, 153},
-	{36, 94, 13, 28, 6, 183, 71, 222},
-	{179, 18, 77, 200, 67, 187, 139, 166},
-	{31, 3, 90, 125, 9, 56, 37, 31},
-	{93, 212, 203, 252, 150, 245, 69, 59},
-	{19, 13, 137, 10, 28, 219, 174, 50}},
-	{{41,35, 190, 132, 225, 108, 214, 174},
-    {82, 144, 73, 241, 241, 187, 233, 235},
-    {179, 166, 219, 60, 135, 12, 62, 153},
-    {36, 94, 13, 28, 6, 183, 71, 222},
-    {179, 18, 77, 200, 67, 187, 139, 166},
-    {31, 3, 90, 125, 9, 56, 37, 31},
-    {93, 212, 203, 252, 150, 245, 69, 59},
-    {19, 13, 137, 10, 28, 219, 174, 50}},
-    {{41,35, 190, 132, 225, 108, 214, 174},
-	{82, 144, 73, 241, 241, 187, 233, 235},
-	{179, 166, 219, 60, 135, 12, 62, 153},
-	{36, 94, 13, 28, 6, 183, 71, 222},
-	{179, 18, 77, 200, 67, 187, 139, 166},
-	{31, 3, 90, 125, 9, 56, 37, 31},
-	{93, 212, 203, 252, 150, 245, 69, 59},
-	{19, 13, 137, 10, 28, 219, 174, 50}},
-	{{41,35, 190, 132, 225, 108, 214, 174},
-    {82, 144, 73, 241, 241, 187, 233, 235},
-    {179, 166, 219, 60, 135, 12, 62, 153},
-    {36, 94, 13, 28, 6, 183, 71, 222},
-    {179, 18, 77, 200, 67, 187, 139, 166},
-    {31, 3, 90, 125, 9, 56, 37, 31},
-    {93, 212, 203, 252, 150, 245, 69, 59},
-    {19, 13, 137, 10, 28, 219, 174, 50}},
-    {{41,35, 190, 132, 225, 108, 214, 174},
-	{82, 144, 73, 241, 241, 187, 233, 235},
-	{179, 166, 219, 60, 135, 12, 62, 153},
-	{36, 94, 13, 28, 6, 183, 71, 222},
-	{179, 18, 77, 200, 67, 187, 139, 166},
-	{31, 3, 90, 125, 9, 56, 37, 31},
-	{93, 212, 203, 252, 150, 245, 69, 59},
-	{19, 13, 137, 10, 28, 219, 174, 50}},
-	{{41,35, 190, 132, 225, 108, 214, 174},
-    {82, 144, 73, 241, 241, 187, 233, 235},
-    {179, 166, 219, 60, 135, 12, 62, 153},
-    {36, 94, 13, 28, 6, 183, 71, 222},
-    {179, 18, 77, 200, 67, 187, 139, 166},
-    {31, 3, 90, 125, 9, 56, 37, 31},
-    {93, 212, 203, 252, 150, 245, 69, 59},
-    {19, 13, 137, 10, 28, 219, 174, 50}},
-    {{41,35, 190, 132, 225, 108, 214, 174},
-	{82, 144, 73, 241, 241, 187, 233, 235},
-	{179, 166, 219, 60, 135, 12, 62, 153},
-	{36, 94, 13, 28, 6, 183, 71, 222},
-	{179, 18, 77, 200, 67, 187, 139, 166},
-	{31, 3, 90, 125, 9, 56, 37, 31},
-	{93, 212, 203, 252, 150, 245, 69, 59},
-	{19, 13, 137, 10, 28, 219, 174, 50}},
-	{{41,35, 190, 132, 225, 108, 214, 174},
-    {82, 144, 73, 241, 241, 187, 233, 235},
-    {179, 166, 219, 60, 135, 12, 62, 153},
-    {36, 94, 13, 28, 6, 183, 71, 222},
-    {179, 18, 77, 200, 67, 187, 139, 166},
-    {31, 3, 90, 125, 9, 56, 37, 31},
-    {93, 212, 203, 252, 150, 245, 69, 59},
-    {19, 13, 137, 10, 28, 219, 174, 50}},
-
-};
-
-int main(){
-
-    string base_data;
-    string base_answer;
-    int cnt = 1;
-    for(int t=1; t<=TOTAL; t++){
-            
-        // base_data = "./test_bench/data/" + to_string(t);
-        // base_answer = "./test_bench/answer/" + to_string(t);
-
-        // ÂáÜÂ§áÊï∞ÊçÆÔºå‰ªéÊñá‰ª∂ËæìÂÖ•
-        // freopen(base_data.c_str(), "r", stdin);
-        // freopen(base_answer.c_str(), "w", stdout);
-
-
-        int out[POOL_OUT_HEIGHT * POOL_OUT_WIDTH];
-        fill(out, out + POOL_OUT_HEIGHT * POOL_OUT_WIDTH, -INF);
-
-        // ÊääinËΩ¨Âåñ‰∏∫ÂçïË°åÁü©Èòµ
-        int a[HEIGHT * WIDTH * CHANNEL];
-        memset(a, 0, sizeof(a));
-        for(int k=0; k<CHANNEL; k++)
-            for(int i=0; i<HEIGHT; i++)
-                for(int j=0; j<WIDTH; j++)
-                    // cin >> a[(k * HEIGHT * WIDTH) + i*WIDTH + j];
-                    a[(k * HEIGHT * WIDTH) + i*WIDTH + j] = mat[k][i][j];
-
-
-        combine(a, out);
-
-        fclose(stdout);
-        fclose(stdin);
-    }
-    return 0;
+				linebuf_update:
+				for(short channel=0; channel < CHANNEL; channel++)
+					linebuf[channel](1,(col+2) % WIDTH) = new_pixel[channel];
+			}
+		}
+	}
 }
